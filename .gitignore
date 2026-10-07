@@ -1,0 +1,19 @@
+# 環境変数
+.env
+.env.local
+
+# Node
+node_modules/
+frontend/node_modules/
+.pnpm-store/
+frontend/.pnpm-store/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+
+# PHP/Composer
+backend/vendor/
+backend/database/database.sqlite
+backend/.phpunit.result.cache
+
+# ローカル設定
+.claude/

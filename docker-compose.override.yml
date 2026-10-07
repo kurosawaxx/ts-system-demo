@@ -1,0 +1,26 @@
+services:
+  mysql:
+    ports:
+      - "3320:3306"
+
+  backend:
+    ports:
+      - "8020:8015"
+    command: sh -c "composer install --no-interaction --prefer-dist --ignore-platform-reqs && php artisan migrate --force && php artisan db:seed --force && php artisan serve --host=0.0.0.0 --port=8015"
+    volumes:
+      - ./backend:/var/www/html
+
+  frontend:
+    build:
+      context: ./frontend
+      target: deps
+    command: sh -c "pnpm install --config.minimumReleaseAge=0 --ignore-scripts && ./node_modules/.bin/next dev --webpack -p 3015"
+    ports:
+      - "3020:3015"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8020
+      CI: "true"
+      WATCHPACK_POLLING: "true"

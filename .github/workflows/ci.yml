@@ -1,0 +1,71 @@
+name: CI
+
+# ポートフォリオ用のデモリポジトリのため、自動実行は無効にしている（手動実行のみ）。
+# 実運用では以下のように push / pull_request をトリガーにする。
+#
+#   on:
+#     push:
+#       branches: [main]
+#     pull_request:
+on:
+  workflow_dispatch:
+
+jobs:
+  backend:
+    name: Backend (PHPUnit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          # PhpSpreadsheet が xlsx を読み書きするために必要
+          extensions: zip, dom, simplexml, xmlwriter, mbstring, fileinfo, gd
+          coverage: none
+
+      # symfony 8.0 系は php >=8.4 を要求するが、使用する 8.4 の組み込み関数は
+      # bootstrap/php_compat.php で polyfill しているため 8.3 で動作する
+      - name: Install dependencies
+        working-directory: backend
+        run: composer install --no-interaction --prefer-dist --no-progress --ignore-platform-reqs
+
+      - name: Prepare environment
+        working-directory: backend
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      # DBはphpunit.xmlでSQLite in-memoryに固定しているためMySQLサービスは不要
+      - name: Run tests
+        working-directory: backend
+        run: php artisan test
+
+  frontend:
+    name: Frontend (Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      # pnpm-workspace.yaml の minimumReleaseAge を CI では無効化する
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+
+      - name: Run tests
+        working-directory: frontend
+        run: pnpm test
+
+      - name: Build
+        working-directory: frontend
+        run: pnpm build

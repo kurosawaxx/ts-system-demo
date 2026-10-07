@@ -1,0 +1,57 @@
+services:
+  mysql:
+    image: mysql:8.0.34
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-secret}
+      MYSQL_DATABASE: ${DB_DATABASE:-ts_system_demo}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    # PID 1 に tini を置き、停止シグナルでアプリを即停止させる。
+    # php:*-fpm イメージの停止シグナルは SIGQUIT で、php artisan serve を
+    # PID 1 で動かすとこれを無視するため、--force-recreate のたびに 10 秒待って
+    # SIGKILL になり、高負荷時は停止が間に合わず再作成に失敗することがある
+    # （2026-09-30 stg で発生）。ローカル計測で停止は 10.6 秒 → 1.2 秒。
+    init: true
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      APP_KEY: ${APP_KEY}
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-ts_system_demo}
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      FRONTEND_URL: http://localhost:3020
+      SANCTUM_STATEFUL_DOMAINS: localhost:3020
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./backend:/var/www/html
+
+  frontend:
+    image: node:24-alpine
+    command: sh -c "corepack enable && corepack prepare pnpm@10 --activate && pnpm install --config.minimumReleaseAge=0 && pnpm build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public && node .next/standalone/server.js"
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8020
+      PORT: "3015"
+      HOSTNAME: "0.0.0.0"
+      CI: "true"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
